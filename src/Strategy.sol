@@ -5,8 +5,8 @@ pragma solidity ^0.8.19;
 import {ReentrancyGuard} from "openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 
 // Intefaces
-import {IAllo} from "allo/contracts/core/IAllo.sol";
-import {IRegistry} from "allo/contracts/core/IRegistry.sol";
+import {IAllo} from "allo/contracts/core/interfaces/IAllo.sol";
+import {IRegistry} from "allo/contracts/core/interfaces/IRegistry.sol";
 
 // Core Contracts
 import {BaseStrategy} from "allo/contracts/strategies/BaseStrategy.sol";
@@ -51,7 +51,7 @@ contract Strategy is BaseStrategy {
     /// ============= Views ================
     /// ====================================
 
-    function getRecipientStatus(address _recipientId) external view override returns (RecipientStatus) {}
+    function getRecipientStatus(address _recipientId) external view override returns (Status) {}
 
     /// ====================================
     /// =========== Internal ===============
@@ -66,5 +66,5 @@ contract Strategy is BaseStrategy {
 
     function _isValidAllocator(address _allocator) internal view virtual override returns (bool) {}
 
-    function _getRecipientStatus(address _recipientId) internal view virtual override returns (RecipientStatus) {}
+    function _getRecipientStatus(address _recipientId) internal view virtual override returns (Status) {}
 }

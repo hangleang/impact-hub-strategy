@@ -7,7 +7,7 @@ import "forge-std/Test.sol";
 import {Strategy} from "src/Strategy.sol";
 
 // Strategy Interface
-import {IStrategy} from "allo/contracts/strategies/IStrategy.sol";
+import {IStrategy} from "allo/contracts/core/interfaces/IStrategy.sol";
 
 // Test libraries
 import {AlloSetup} from "allo/test/foundry/shared/AlloSetup.sol";

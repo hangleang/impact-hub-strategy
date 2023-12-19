@@ -7,6 +7,7 @@
 [submodule "lib/openzeppelin-contracts"]
 	path = lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+	branch = release-v4.9
 [submodule "lib/allo-v2"]
 	path = lib/allo-v2
 	url = https://github.com/allo-protocol/allo-v2
