@@ -10,18 +10,19 @@ import {IRegistry} from "allo/contracts/core/interfaces/IRegistry.sol";
 
 // Core Contracts
 import {BaseStrategy} from "allo/contracts/strategies/BaseStrategy.sol";
+import {QVBaseStrategy} from "allo/contracts/strategies/qv-base/QVBaseStrategy.sol";
 
 // Internal Libraries
 import {Metadata} from "allo/contracts/core/libraries/Metadata.sol";
 
-/// @title Strategy
-contract Strategy is BaseStrategy {
+/// @title Impact Hub Strategy contract
+contract ImpactHubStrategy is QVBaseStrategy {
   
     /// ===============================
     /// ======== Constructor ==========
     /// ===============================
 
-    constructor(address _allo, string memory _name) BaseStrategy(_allo, _name) {}
+    constructor(address _allo, string memory _name) QVBaseStrategy(_allo, _name) {}
 
     /// ===============================
     /// ========= Initialize ==========
@@ -67,4 +68,13 @@ contract Strategy is BaseStrategy {
     function _isValidAllocator(address _allocator) internal view virtual override returns (bool) {}
 
     function _getRecipientStatus(address _recipientId) internal view virtual override returns (Status) {}
+
+    function _isAcceptedRecipient(address _recipientId) internal view virtual override returns (bool) {}
+
+    function _hasVoiceCreditsLeft(uint256 _voiceCreditsToAllocate, uint256 _allocatedVoiceCredits)
+        internal
+        view
+        virtual
+        override
+        returns (bool) {}
 }
