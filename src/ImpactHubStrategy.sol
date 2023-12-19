@@ -3,6 +3,7 @@ pragma solidity ^0.8.19;
 
 // External Libraries
 import {ReentrancyGuard} from "openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
+import {IHats} from "hats/Interfaces/IHats.sol";
 
 // Intefaces
 import {IAllo} from "allo/contracts/core/interfaces/IAllo.sol";
@@ -17,6 +18,15 @@ import {Metadata} from "allo/contracts/core/libraries/Metadata.sol";
 
 /// @title Impact Hub Strategy contract
 contract ImpactHubStrategy is QVBaseStrategy {
+    /// ================================
+    /// ========== Storage =============
+    /// ================================
+
+    /// @notice Hats protocol contract
+    IHats public hats;
+
+    /// @notice Wearer of HatId is allowed to allocate
+    uint256 public hatId;
   
     /// ===============================
     /// ======== Constructor ==========
@@ -28,7 +38,23 @@ contract ImpactHubStrategy is QVBaseStrategy {
     /// ========= Initialize ==========
     /// ===============================
 
-    function initialize(uint256 _poolId, bytes memory _data) public virtual override {}
+    // @notice Initialize the strategy
+    /// @dev This will revert if the strategy is already initialized and 'msg.sender' is not the 'Allo' contract.
+    /// @param _poolId ID of the pool
+    /// @param _data The data to be decoded
+    /// @custom:data (bool registryGating, bool metadataRequired, uint256 reviewThreshold, 
+    ///    uint64 registrationStartTime, uint64 registrationEndTime, uint64 allocationStartTime, uint64 allocationEndTime), 
+    ///    address _hats, uint256 _hatId
+    function initialize(uint256 _poolId, bytes memory _data) external virtual override {
+        (InitializeParams memory initializeParams, address _hats, uint256 _hatId) =
+            abi.decode(_data, (InitializeParams, address, uint256));
+        __QVBaseStrategy_init(_poolId, initializeParams);
+
+        if (_hats == address(0)) revert ZERO_ADDRESS();
+        hats = IHats(_hats);
+        hatId = _hatId;
+        emit Initialized(_poolId, _data);
+    }
 
     /// ====================================
     /// ======== Strategy Methods ==========
@@ -52,7 +78,9 @@ contract ImpactHubStrategy is QVBaseStrategy {
     /// ============= Views ================
     /// ====================================
 
-    function getRecipientStatus(address _recipientId) external view override returns (Status) {}
+    function getRecipientStatus(address _recipientId) external view override returns (Status) {
+        return _getRecipientStatus(_recipientId);
+    }
 
     /// ====================================
     /// =========== Internal ===============
@@ -65,11 +93,20 @@ contract ImpactHubStrategy is QVBaseStrategy {
         returns (PayoutSummary memory)
     {}
 
-    function _isValidAllocator(address _allocator) internal view virtual override returns (bool) {}
+    /// @notice Checks if address is valid allocator.
+    /// @param _allocator The allocator address
+    /// @return Returns true if address is wearer of hatId
+    function _isValidAllocator(address _allocator) internal view virtual override returns (bool) {
+        return hats.isWearerOfHat(_allocator, hatId);
+    }
 
-    function _getRecipientStatus(address _recipientId) internal view virtual override returns (Status) {}
+    // function _getRecipientStatus(address _recipientId) internal view virtual override returns (Status) {
+    //     return _isAcceptedRecipient(_recipientId) ? Status.Accepted : Status.Rejected;
+    // }
 
-    function _isAcceptedRecipient(address _recipientId) internal view virtual override returns (bool) {}
+    function _isAcceptedRecipient(address _recipientId) internal view virtual override returns (bool) {
+        return hats.isWearerOfHat(_recipientId, hatId);
+    }
 
     function _hasVoiceCreditsLeft(uint256 _voiceCreditsToAllocate, uint256 _allocatedVoiceCredits)
         internal
@@ -77,4 +114,20 @@ contract ImpactHubStrategy is QVBaseStrategy {
         virtual
         override
         returns (bool) {}
+
+    /// ====================================
+    /// ============= Hook =================
+    /// ====================================
+
+    /// @notice Hook called before allocation to check if the sender is an allocator
+    /// @param _sender The sender of the transaction
+    function _beforeAllocate(bytes memory, address _sender) internal view override {
+        if (!_isValidAllocator(_sender)) revert UNAUTHORIZED();
+    }
+
+    /// @notice Hook called before allocation to check if the sender is an allocator
+    /// @param _sender The sender of the transaction
+    function _beforeRegisterRecipient(bytes memory, address _sender) internal view override {
+        if (!_isValidAllocator(_sender)) revert UNAUTHORIZED();
+    }
 }
