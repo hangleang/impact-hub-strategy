@@ -18,15 +18,26 @@ import {Metadata} from "allo/contracts/core/libraries/Metadata.sol";
 
 /// @title Impact Hub Strategy contract
 contract ImpactHubStrategy is QVBaseStrategy {
+    event AllocatedWithHat(address indexed recipientId, address indexed _sender, uint256 indexed hatId, uint256 voiceCreditsToAllocate);
+
     /// ================================
     /// ========== Storage =============
     /// ================================
+    struct InitializeHatsParams {
+        InitializeParams params;
+        address hats;
+        uint256[] hatIds;
+        uint256[] maxVoiceCreditsPerHatId;
+    }
 
     /// @notice Hats protocol contract
     IHats public hats;
 
-    /// @notice Wearer of HatId is allowed to allocate
-    uint256 public hatId;
+    /// @notice Wearer of HatId is allowed to allocate and register
+    uint256[] public hatIds;
+
+    /// @notice Mapping of hatId => maxVoiceCredits
+    mapping(uint256 => uint256) public maxVoiceCreditsPerHatId;
   
     /// ===============================
     /// ======== Constructor ==========
@@ -46,33 +57,81 @@ contract ImpactHubStrategy is QVBaseStrategy {
     ///    uint64 registrationStartTime, uint64 registrationEndTime, uint64 allocationStartTime, uint64 allocationEndTime), 
     ///    address _hats, uint256 _hatId
     function initialize(uint256 _poolId, bytes memory _data) external virtual override {
-        (InitializeParams memory initializeParams, address _hats, uint256 _hatId) =
-            abi.decode(_data, (InitializeParams, address, uint256));
-        __QVBaseStrategy_init(_poolId, initializeParams);
+        (InitializeHatsParams memory initializeHatsParams) =
+            abi.decode(_data, (InitializeHatsParams));
+        __ImpactHubStrategy_init(poolId, initializeHatsParams);
 
-        if (_hats == address(0)) revert ZERO_ADDRESS();
-        hats = IHats(_hats);
-        hatId = _hatId;
         emit Initialized(_poolId, _data);
+    }
+
+    /// @dev Internal initialize function that sets the poolId in the base strategy
+    function __ImpactHubStrategy_init(uint256 _poolId, InitializeHatsParams memory _initializeHatsParams) internal {
+        __QVBaseStrategy_init(_poolId, _initializeHatsParams.params);
+
+        uint256 hatLength = _initializeHatsParams.hatIds.length;
+        if (hatLength != _initializeHatsParams.maxVoiceCreditsPerHatId.length) {
+            revert INVALID();
+        }
+        if (_initializeHatsParams.hats == address(0)) revert ZERO_ADDRESS();
+        hats = IHats(_initializeHatsParams.hats);
+
+        uint256 i = 0;
+        for (; i < hatLength;) {
+            uint256 hatId = _initializeHatsParams.hatIds[i];
+            hatIds.push(hatId);
+            maxVoiceCreditsPerHatId[hatId] = _initializeHatsParams.maxVoiceCreditsPerHatId[i];
+            
+            unchecked {
+                i++;
+            }
+        }
     }
 
     /// ====================================
     /// ======== Strategy Methods ==========
     /// ====================================
 
-    /// @notice Register to the pool
-    /// @param _data The data to be decoded
+    // /// @notice Register to the pool
+    // /// @param _data The data to be decoded
+    // /// @param _sender The sender of the transaction
+    // function _registerRecipient(bytes memory _data, address _sender) internal override returns (address recipientId) {}
+
+     /// @notice Allocate votes to a recipient
+    /// @param _data The data
     /// @param _sender The sender of the transaction
-    function _registerRecipient(bytes memory _data, address _sender) internal override returns (address recipientId) {}
+    /// @dev Only the pool manager(s) can call this function
+    function _allocate(bytes memory _data, address _sender) internal override {
+        (address recipientId, uint256 hatId, uint256 voiceCreditsToAllocate) =
+            abi.decode(_data, (address, uint256, uint256));
 
-    /// @notice Allocate amount to recipent for direct grants
-    /// @param _data The data to be decoded
-    /// @param _sender The sender of the allocation
-    function _allocate(bytes memory _data, address _sender) internal virtual override {}
+        // spin up the structs in storage for updating
+        Recipient storage recipient = recipients[recipientId];
+        Allocator storage allocator = allocators[_sender];
 
-    /// @notice Distribute the upcoming milestone
-    /// @param _sender The sender of the distribution
-    function _distribute(address[] memory _recipientIds, bytes memory, address _sender) internal virtual override {}
+        if (!hats.isWearerOfHat(_sender, hatId)) {
+            revert UNAUTHORIZED();
+        }
+
+        if (!_isAcceptedRecipient(recipientId)) {
+            revert RECIPIENT_ERROR(recipientId);
+        }
+
+        if (
+            !_hasVoiceCreditsLeft(
+                voiceCreditsToAllocate + allocator.voiceCredits, maxVoiceCreditsPerHatId[hatId]
+            )
+        ) {
+            revert INVALID();
+        }
+
+        _qv_allocate(allocator, recipient, recipientId, voiceCreditsToAllocate, _sender);
+
+        emit AllocatedWithHat(recipientId, _sender, hatId, voiceCreditsToAllocate);
+    }
+
+    // /// @notice Distribute the upcoming milestone
+    // /// @param _sender The sender of the distribution
+    // function _distribute(address[] memory _recipientIds, bytes memory, address _sender) internal virtual override {}
 
     /// ====================================
     /// ============= Views ================
@@ -97,7 +156,19 @@ contract ImpactHubStrategy is QVBaseStrategy {
     /// @param _allocator The allocator address
     /// @return Returns true if address is wearer of hatId
     function _isValidAllocator(address _allocator) internal view virtual override returns (bool) {
-        return hats.isWearerOfHat(_allocator, hatId);
+        uint256 hatLength = hatIds.length;
+        uint256 i = 0;
+        for (; i < hatLength;) {
+            if (hats.isWearerOfHat(_allocator, hatIds[i])) {
+                return true;
+            }
+
+            unchecked {
+                i++;
+            }
+        }
+
+        return false;
     }
 
     // function _getRecipientStatus(address _recipientId) internal view virtual override returns (Status) {
@@ -105,15 +176,20 @@ contract ImpactHubStrategy is QVBaseStrategy {
     // }
 
     function _isAcceptedRecipient(address _recipientId) internal view virtual override returns (bool) {
-        return hats.isWearerOfHat(_recipientId, hatId);
+        return _isValidAllocator(_recipientId);
     }
 
-    function _hasVoiceCreditsLeft(uint256 _voiceCreditsToAllocate, uint256 _allocatedVoiceCredits)
+    /// @notice check if allocator has voice credits left
+    /// @param _voiceCredits The sum of usedVoiceCredits with voiceCreditsToAllocate
+    /// @param _maxVoiceCredits The maxVoiceCredit of the hat wearer
+    function _hasVoiceCreditsLeft(uint256 _voiceCredits, uint256 _maxVoiceCredits)
         internal
         view
         virtual
         override
-        returns (bool) {}
+        returns (bool) {
+            return _voiceCredits  <= _maxVoiceCredits;
+        }
 
     /// ====================================
     /// ============= Hook =================
