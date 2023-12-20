@@ -75,9 +75,16 @@ contract ImpactHubStrategy is QVBaseStrategy {
         if (_initializeHatsParams.hats == address(0)) revert ZERO_ADDRESS();
         hats = IHats(_initializeHatsParams.hats);
 
+        uint32 topHatDomain;
         uint256 i = 0;
         for (; i < hatLength;) {
             uint256 hatId = _initializeHatsParams.hatIds[i];
+            if (i == 0) {
+                topHatDomain = hats.getTopHatDomain(hatId);
+            } else if (topHatDomain != hats.getTopHatDomain(hatId)) {
+                revert INVALID();
+            }
+            
             hatIds.push(hatId);
             maxVoiceCreditsPerHatId[hatId] = _initializeHatsParams.maxVoiceCreditsPerHatId[i];
             
