@@ -60,13 +60,13 @@ contract QVHatsStrategy is QVBaseStrategy {
     ///    address _hats, uint256 _hatId
     function initialize(uint256 _poolId, bytes memory _data) external virtual override {
         (InitializeHatsParams memory initializeHatsParams) = abi.decode(_data, (InitializeHatsParams));
-        __ImpactHubStrategy_init(poolId, initializeHatsParams);
+        __QVHats_init(poolId, initializeHatsParams);
 
         emit Initialized(_poolId, _data);
     }
 
     /// @dev Internal initialize function that sets the poolId in the base strategy
-    function __ImpactHubStrategy_init(uint256 _poolId, InitializeHatsParams memory _initializeHatsParams) internal {
+    function __QVHats_init(uint256 _poolId, InitializeHatsParams memory _initializeHatsParams) internal {
         __QVBaseStrategy_init(_poolId, _initializeHatsParams.params);
 
         uint256 hatLength = _initializeHatsParams.hatIds.length;
