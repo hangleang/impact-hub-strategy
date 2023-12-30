@@ -120,10 +120,6 @@ contract QVHatsStrategy is QVBaseStrategy {
             revert UNAUTHORIZED();
         }
 
-        if (!_isAcceptedRecipient(recipientId)) {
-            revert RECIPIENT_ERROR(recipientId);
-        }
-
         if (!_hasVoiceCreditsLeft(voiceCreditsToAllocate + allocator.voiceCredits, maxVoiceCreditsPerHatId[hatId])) {
             revert INVALID();
         }
@@ -175,9 +171,9 @@ contract QVHatsStrategy is QVBaseStrategy {
         return false;
     }
 
-    // function _getRecipientStatus(address _recipientId) internal view virtual override returns (Status) {
-    //     return _isAcceptedRecipient(_recipientId) ? Status.Accepted : Status.Rejected;
-    // }
+    function _getRecipientStatus(address _recipientId) internal view virtual override returns (Status) {
+        return _isAcceptedRecipient(_recipientId) ? Status.Accepted : Status.Rejected;
+    }
 
     function _isAcceptedRecipient(address _recipientId) internal view virtual override returns (bool) {
         return _isValidAllocator(_recipientId);
